@@ -1,0 +1,218 @@
+/* index.css: 全局样式与设计变量——白底深蓝主色调，卡片式布局，CSS 动画 */
+@import "tailwindcss";
+
+:root {
+  /* 颜色 */
+  --background: #ffffff;
+  --background-secondary: #f2f5fb;
+  --card: #ffffff;
+  --primary: #1e40af;
+  --primary-soft: color-mix(in srgb, var(--primary) 9%, transparent);
+  --text-primary: #182236;
+  --text-secondary: #5c6577;
+  --icon-muted: #64748b;
+  --destructive: #dc2626;
+  --success: #16a34a;
+  --border: #e5e9f2;
+  --console-bg: #0f172a;
+  --console-text: #d7e2ff;
+
+  /* 圆角 */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.07), 0 1px 2px rgba(16, 24, 40, 0.04);
+  --shadow-md: 0 4px 14px rgba(16, 24, 40, 0.09);
+  --shadow-lg: 0 12px 28px rgba(16, 24, 40, 0.14);
+
+  /* 字号 */
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 26px;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--background-secondary);
+  color: var(--text-primary);
+  font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  font-size: var(--font-size-base);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 动画 ---------- */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes pulse-dot {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 35%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 5px color-mix(in srgb, currentColor 0%, transparent);
+  }
+}
+
+/* 视图切换入场动画 */
+.view-enter {
+  animation: fade-in-up 0.35s ease both;
+}
+
+/* ---------- 卡片 ---------- */
+.panel-card {
+  background: var(--card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+}
+
+/* 内卡：阴影分层 + 悬停微浮动 */
+.inner-card {
+  background: var(--card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.inner-card:hover {
+  box-shadow: var(--shadow-lg);
+  transform: translateY(-1px);
+}
+
+/* ---------- 按钮 ---------- */
+.btn-text:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.08);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-icon:hover {
+  background: var(--primary-soft);
+  color: var(--primary);
+}
+
+.btn-icon-danger:hover {
+  background: color-mix(in srgb, var(--destructive) 10%, transparent);
+}
+
+/* ---------- 模态框 ---------- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(3px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  animation: fade-in 0.18s ease both;
+}
+
+.modal-card {
+  background: var(--card);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  animation: scale-in 0.22s ease both;
+}
+
+/* ---------- 输入框 ---------- */
+.field-input {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  outline: none;
+  background: var(--background-secondary);
+  color: var(--text-primary);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-sm);
+  box-shadow: inset 0 0 0 1px transparent;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+}
+
+.field-input:focus {
+  background: var(--card);
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--primary) 55%, transparent);
+}
+
+/* ---------- 状态点 ---------- */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.status-dot-pulse {
+  animation: pulse-dot 1.6s ease-out infinite;
+}
+
+/* ---------- 控制台 ---------- */
+.console-area {
+  background: var(--console-bg);
+  color: var(--console-text);
+  border-radius: var(--radius-lg);
+  font-family: "Cascadia Code", "JetBrains Mono", Consolas, monospace;
+  font-size: var(--font-size-xs);
+  line-height: 1.6;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.console-area::-webkit-scrollbar {
+  width: 8px;
+}
+
+.console-area::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.35);
+  border-radius: 4px;
+}
+
+/* ---------- 环形进度 ---------- */
+.ring-progress {
+  transition: stroke-dashoffset 0.8s ease;
+}

@@ -1,0 +1,37 @@
+实现一个服务器管理工具，使用rust编写后端，html作为前端提供访问。
+要求：
+1. 通过密钥登录管理界面；
+2，通过命令执行挂在持久化任务，并且能读取程序的控制台最新500行输出内容；
+3. 当程序错误退出后，任务不消失展示红点，允许读取程序的最后的输出内容；
+4. 使用环形卡片近似实时展示cpu占用和内存占用。
+5. 前端使用react框架编写，构建成静态资源给rust使用。SPA单页网页设计。
+
+页面主色调为白色，辅色调为深蓝色，界面简洁优雅，使用css动画辅助界面切换。
+
+用户界面偏好
+
+- **避免 border-bottom**：不使用下边框线来分隔区块。
+- **卡片式分隔**：需要区分功能块时，使用大圆角卡片样式（`border-radius: var(--radius-xl)` / `var(--radius-lg)`）。
+- **背景与卡片对比**：卡片背景色与页面背景色需有轻微区分度（如页面背景 `var(--background-secondary)` vs 卡片背景 `var(--card)`），以形成视觉层次感。
+- **内卡层次感**：大卡片内部的小卡片（如会话项、模型卡片等），**不使用** `border: 1px solid var(--border)` 来描边；改用 `boxShadow` 构建层次感——默认为 `boxShadow: var(--shadow-sm)`，鼠标悬停提升到 `boxShadow: var(--shadow-lg)` + `translateY(-1px)`，通过阴影深浅和微浮动营造分隔效果。
+- **字号统一引用变量**：所有涉及 `font-size` 的样式（内联 `style` 与 CSS 规则）**禁止硬编码 px 值**，必须从 `frontend/src/index.css` 的 `:root` 中已定义的 `--font-size-*` 变量（xs/sm/base/lg/xl/2xl）选取引用；如现有梯度不满足需求，应先在该文件中新增变量再引用，而非在业务代码中写死像素值。
+- **按钮设计风格**：按钮统一样式规范，遵循简洁卡片风格——
+  - **文本按钮**（带图标+文字，如「返回」「数据中心」「新建任务」）：`className="flex h-8 cursor-pointer items-center gap-1.5 px-3 outline-none transition-all duration-150"`；`style` 含 `borderRadius: 'var(--radius-md)'`、`fontSize: 'var(--font-size-xs)'`、`fontWeight: 600`、`boxShadow: 'var(--shadow-sm)'`；
+  - **图标按钮**（纯图标，如主题切换、设置、文档、书记官）：`className="flex h-7 w-7 cursor-pointer items-center justify-center outline-none transition-all duration-150"`；`style` 含 `color: 'var(--icon-muted)'`、`borderRadius: 'var(--radius-md)'`；置于分组容器内时背景透明，不单独设 `boxShadow`；
+  - **主色按钮**（如「新建任务」）：保留 `backgroundColor: 'var(--primary)'`、`color: '#ffffff'`，并叠加 `boxShadow: 'var(--shadow-sm)'`；
+  - **分组容器**（如顶栏右侧工具组）：使用 `borderRadius: 'var(--radius-lg)'`、`backgroundColor: 'var(--card)'`、`boxShadow: 'var(--shadow-sm)'`，内部按钮背景透明；
+  - **禁止**使用 `border: '1px solid var(--border)'` 描边按钮，改用 `boxShadow` 构建层次感；
+  - **禁止**使用 `onMouseEnter`/`onMouseLeave` 手动切换内联样式来实现 hover 效果，保持组件简洁；如需 hover 反馈，交由 CSS `:hover` 规则处理。
+- **模态确认弹窗**：需要二次确认的模态弹窗（如删除会话、取消部署等危险操作）统一复用 `frontend/src/components/ConfirmDialog.tsx` 的 `ConfirmDialog` 组件，**不要**自行实现 fixed overlay + 居中容器的 modal 结构。该组件内置背景遮罩 + 居中卡片 + `loading` 轻量遮罩，内部复用 `ApprovalCard` 渲染卡片本体，支持 `variant: 'primary' | 'danger'` 区分主色/危险场景。
+- **危险图标按钮样式**：列表项内随父级悬停才显现的危险操作图标按钮（如删除、取消等），参考 `frontend/src/components/Sidebar.tsx` 中删除对话按钮（约 L146-163）的写法——`className="flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center opacity-0 outline-none transition-all duration-150 group-hover:opacity-100 group-focus-within:opacity-100"`，`style` 含 `color: 'var(--destructive)'`、`borderRadius: 'var(--radius-md)'`，hover 背景用 `color-mix(in srgb, var(--destructive) 10%, transparent)`；父级容器需带 `group` 类以驱动 `group-hover` 显隐。
+
+## 12. 额外约束说明
+
+- 当你修改代码文件的时候，需要同步对代码头部的注释进行维护。
+- 新建代码的时候，需要在头部写注释，表明代码功能。
+- 编辑代码以最小改动为原则，除非用户明确指出可以大范围改动。
+- 在分析用户需求的时候，需要对其中表述不清楚的，无法落地的内容对用户进行提问。
+- 修改代码的时候，需要检查是否会涉及到上游和下游的数据变量，若涉及则需要仔细判断其改动影响，不要改崩了。
+- 修改完代码、做完相关的验证检查后，使用git commit 对改动进行提交，但不需要git push同步云端。提交信息中，使用中文简要说明本次改动。注意当前环境下为多人开发，git里可能存在很多与你无关的改动追踪。注意提交时只需要提交你改动的文件。当你的文件修改被卷入其他提交时,不要管被卷入的文件,提交你剩下的文件即可.如果你的文件提交卷入了其他人的修改，也不要管，直接提交即可。
+- PowerShell 不支持 heredoc，在使用git commit 提交的时候可使用多次-m "xxx"进行多条信息换行提交。
+- 允许多次提问用户,直到困惑彻底澄清.
