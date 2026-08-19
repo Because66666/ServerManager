@@ -30,8 +30,8 @@ pub struct AppState {
     pub sessions: Mutex<HashSet<String>>,
     /// 任务表：任务 id -> 任务内部结构（含输出环形缓冲）
     pub tasks: Mutex<HashMap<String, TaskInner>>,
-    /// 运行中任务的停止信号发送端：任务 id -> kill 通道
-    pub kill_senders: Mutex<HashMap<String, mpsc::Sender<()>>>,
+    /// 运行中任务的停止信号发送端：任务 id -> (进程代数, kill 通道)
+    pub kill_senders: Mutex<HashMap<String, (u64, mpsc::Sender<()>)>>,
     /// 整机资源占用缓存，由后台采集任务周期刷新
     pub stats: Mutex<SystemStats>,
 }

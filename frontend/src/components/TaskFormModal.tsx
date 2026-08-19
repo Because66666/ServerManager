@@ -1,18 +1,21 @@
-// CreateTaskModal.tsx: 新建任务弹窗——名称、命令、参数、工作目录表单
+// TaskFormModal.tsx: 任务表单弹窗——新建与编辑复用，编辑保存后由后端立即以新配置重启进程
 import { useState, type FormEvent } from 'react'
-import { api } from '../api'
-import { CloseIcon, PlusIcon, SpinnerIcon } from './icons'
+import { api, type Task } from '../api'
+import { CloseIcon, PencilIcon, PlusIcon, SpinnerIcon } from './icons'
 
-interface CreateTaskModalProps {
+interface TaskFormModalProps {
+  /** 传入已有任务时为编辑模式，否则为新建模式 */
+  task?: Task | null
   onClose: () => void
-  onCreated: () => void
+  onSaved: () => void
 }
 
-export default function CreateTaskModal({ onClose, onCreated }: CreateTaskModalProps) {
-  const [name, setName] = useState('')
-  const [command, setCommand] = useState('')
-  const [args, setArgs] = useState('')
-  const [workDir, setWorkDir] = useState('')
+export default function TaskFormModal({ task, onClose, onSaved }: TaskFormModalProps) {
+  const editing = !!task
+  const [name, setName] = useState(task?.name ?? '')
+  const [command, setCommand] = useState(task?.command ?? '')
+  const [args, setArgs] = useState(task?.args.join(' ') ?? '')
+  const [workDir, setWorkDir] = useState(task?.workDir ?? '')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -25,17 +28,22 @@ export default function CreateTaskModal({ onClose, onCreated }: CreateTaskModalP
     }
     setLoading(true)
     setError('')
+    const payload = {
+      name: name.trim(),
+      command: command.trim(),
+      args: args.trim() ? args.trim().split(/\s+/) : [],
+      workDir: workDir.trim() || undefined,
+    }
     try {
-      await api.createTask({
-        name: name.trim(),
-        command: command.trim(),
-        args: args.trim() ? args.trim().split(/\s+/) : [],
-        workDir: workDir.trim() || undefined,
-      })
-      onCreated()
+      if (editing) {
+        await api.updateTask(task.id, payload)
+      } else {
+        await api.createTask(payload)
+      }
+      onSaved()
       onClose()
     } catch (err) {
-      setError(err instanceof Error ? err.message : '创建任务失败')
+      setError(err instanceof Error ? err.message : editing ? '保存失败' : '创建任务失败')
       setLoading(false)
     }
   }
@@ -50,7 +58,7 @@ export default function CreateTaskModal({ onClose, onCreated }: CreateTaskModalP
             className="flex-1 font-semibold"
             style={{ fontSize: 'var(--font-size-lg)', color: 'var(--text-primary)' }}
           >
-            新建任务
+            {editing ? '编辑任务' : '新建任务'}
           </span>
           <button
             type="button"
@@ -105,6 +113,20 @@ export default function CreateTaskModal({ onClose, onCreated }: CreateTaskModalP
             />
           </label>
 
+          {editing && (
+            <div
+              style={{
+                fontSize: 'var(--font-size-xs)',
+                color: 'var(--text-secondary)',
+                background: 'var(--background-secondary)',
+                borderRadius: 'var(--radius-md)',
+                padding: '8px 12px',
+              }}
+            >
+              保存后将终止当前进程，并立即以新配置重新启动。
+            </div>
+          )}
+
           {error && (
             <div
               className="view-enter"
@@ -142,8 +164,14 @@ export default function CreateTaskModal({ onClose, onCreated }: CreateTaskModalP
                 color: '#ffffff',
               }}
             >
-              {loading ? <SpinnerIcon width={13} height={13} /> : <PlusIcon width={13} height={13} />}
-              {loading ? '创建中…' : '创建并启动'}
+              {loading ? (
+                <SpinnerIcon width={13} height={13} />
+              ) : editing ? (
+                <PencilIcon width={13} height={13} />
+              ) : (
+                <PlusIcon width={13} height={13} />
+              )}
+              {loading ? '保存中…' : editing ? '保存并重启' : '创建并启动'}
             </button>
           </div>
         </form>

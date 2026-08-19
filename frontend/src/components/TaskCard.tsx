@@ -1,16 +1,17 @@
-// TaskCard.tsx: 任务卡片——状态点、命令摘要、停止/删除操作（删除随父级悬停显现）
+// TaskCard.tsx: 任务卡片——状态点、命令摘要、编辑/停止/删除操作（图标随父级悬停显现）
 import type { Task } from '../api'
 import { STATUS_META } from './status'
-import { StopIcon, TrashIcon } from './icons'
+import { PencilIcon, StopIcon, TrashIcon } from './icons'
 
 interface TaskCardProps {
   task: Task
   onOpen: (task: Task) => void
+  onEdit: (task: Task) => void
   onStop: (task: Task) => void
   onDelete: (task: Task) => void
 }
 
-export default function TaskCard({ task, onOpen, onStop, onDelete }: TaskCardProps) {
+export default function TaskCard({ task, onOpen, onEdit, onStop, onDelete }: TaskCardProps) {
   const meta = STATUS_META[task.status]
   const commandLine = [task.command, ...task.args].join(' ')
 
@@ -31,6 +32,18 @@ export default function TaskCard({ task, onOpen, onStop, onDelete }: TaskCardPro
           {task.name}
         </span>
 
+        <button
+          type="button"
+          title="编辑任务"
+          className="btn-icon flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center opacity-0 outline-none transition-all duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
+          style={{ color: 'var(--icon-muted)', borderRadius: 'var(--radius-md)' }}
+          onClick={(e) => {
+            e.stopPropagation()
+            onEdit(task)
+          }}
+        >
+          <PencilIcon width={12} height={12} />
+        </button>
         {task.status === 'running' && (
           <button
             type="button"

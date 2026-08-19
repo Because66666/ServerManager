@@ -1,4 +1,4 @@
-// tasks.rs: 进程任务管理——创建、监控、输出环形缓冲（最新 500 行）、停止与删除
+// tasks.rs: 进程任务管理——创建、编辑、监控、输出环形缓冲（最新 500 行）、停止与删除
 use crate::state::{ApiError, ApiResult, AppState};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -52,6 +52,8 @@ pub struct Task {
 pub struct TaskInner {
     pub info: Task,
     pub output: VecDeque<String>,
+    /// 进程代数：每次（重新）启动递增，用于识别旧进程的监控句柄与输出
+    pub generation: u64,
 }
 
 /// 任务输出查询响应
@@ -72,6 +74,16 @@ pub struct CreateTaskRequest {
     pub work_dir: Option<String>,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateTaskRequest {
+    pub name: String,
+    pub command: String,
+    #[serde(default)]
+    pub args: Vec<String>,
+    pub work_dir: Option<String>,
+}
+
 fn now_secs() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -79,10 +91,13 @@ fn now_secs() -> i64 {
         .unwrap_or(0)
 }
 
-/// 向任务输出环形缓冲追加一行
-fn push_line(state: &AppState, id: &str, line: String) {
+/// 向任务输出环形缓冲追加一行（仅当代数匹配，防止旧进程输出污染新会话）
+fn push_line(state: &AppState, id: &str, generation: u64, line: String) {
     let mut tasks = state.tasks.lock().unwrap();
     if let Some(task) = tasks.get_mut(id) {
+        if task.generation != generation {
+            return;
+        }
         if task.output.len() >= MAX_OUTPUT_LINES {
             task.output.pop_front();
         }
@@ -129,7 +144,7 @@ pub async fn create_task(
         created_at: now_secs(),
     };
 
-    match spawn_process(&state, &info) {
+    match spawn_process(&state, &info, 0) {
         Ok((child, stdout, stderr, kill_rx)) => {
             let id = info.id.clone();
             state.tasks.lock().unwrap().insert(
@@ -137,9 +152,10 @@ pub async fn create_task(
                 TaskInner {
                     info: info.clone(),
                     output: VecDeque::new(),
+                    generation: 0,
                 },
             );
-            tokio::spawn(monitor_task(state.clone(), id, child, stdout, stderr, kill_rx));
+            tokio::spawn(monitor_task(state.clone(), id, 0, child, stdout, stderr, kill_rx));
             Ok((StatusCode::CREATED, Json(info)))
         }
         Err(e) => {
@@ -152,9 +168,79 @@ pub async fn create_task(
                 TaskInner {
                     info: failed.clone(),
                     output: VecDeque::new(),
+                    generation: 0,
                 },
             );
             Ok((StatusCode::CREATED, Json(failed)))
+        }
+    }
+}
+
+/// PUT /api/tasks/:id 编辑任务（名称/命令/参数/工作目录），保存后立即以新配置重启进程
+pub async fn update_task(
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<String>,
+    Json(req): Json<UpdateTaskRequest>,
+) -> ApiResult<Json<Task>> {
+    let name = req.name.trim().to_string();
+    let command = req.command.trim().to_string();
+    if name.is_empty() {
+        return Err(ApiError::bad_request("任务名称不能为空"));
+    }
+    if command.is_empty() {
+        return Err(ApiError::bad_request("启动命令不能为空"));
+    }
+
+    // 更新配置并递增代数；旧监控句柄因代数不匹配而自动失效
+    let (was_running, generation) = {
+        let mut tasks = state.tasks.lock().unwrap();
+        let task = tasks
+            .get_mut(&id)
+            .ok_or_else(|| ApiError::not_found("任务不存在"))?;
+        let was_running = task.info.status == TaskStatus::Running;
+        task.info.name = name;
+        task.info.command = command;
+        task.info.args = req.args;
+        task.info.work_dir = req.work_dir;
+        task.info.status = TaskStatus::Running;
+        task.info.exit_code = None;
+        task.info.error = None;
+        task.generation += 1;
+        // 重启后输出从新会话开始，清空旧输出
+        task.output.clear();
+        (was_running, task.generation)
+    };
+
+    // 旧进程仍在运行时先发送停止信号
+    if was_running {
+        if let Some((_, tx)) = state.kill_senders.lock().unwrap().get(&id).cloned() {
+            let _ = tx.try_send(());
+        }
+    }
+
+    let info = state
+        .tasks
+        .lock()
+        .unwrap()
+        .get(&id)
+        .map(|t| t.info.clone())
+        .ok_or_else(|| ApiError::not_found("任务不存在"))?;
+
+    match spawn_process(&state, &info, generation) {
+        Ok((child, stdout, stderr, kill_rx)) => {
+            tokio::spawn(monitor_task(state.clone(), id, generation, child, stdout, stderr, kill_rx));
+            Ok(Json(info))
+        }
+        Err(e) => {
+            // 重启失败：标记 failed 并保留错误原因
+            {
+                let mut tasks = state.tasks.lock().unwrap();
+                if let Some(task) = tasks.get_mut(&id) {
+                    task.info.status = TaskStatus::Failed;
+                    task.info.error = Some(e.clone());
+                }
+            }
+            Err(ApiError::bad_request(e))
         }
     }
 }
@@ -163,6 +249,7 @@ pub async fn create_task(
 fn spawn_process(
     state: &AppState,
     info: &Task,
+    generation: u64,
 ) -> Result<(Child, ChildStdout, ChildStderr, mpsc::Receiver<()>), String> {
     let mut cmd = Command::new(&info.command);
     cmd.args(&info.args)
@@ -178,7 +265,11 @@ fn spawn_process(
     let stdout = child.stdout.take().expect("stdout 已被管道化");
     let stderr = child.stderr.take().expect("stderr 已被管道化");
     let (kill_tx, kill_rx) = mpsc::channel::<()>(1);
-    state.kill_senders.lock().unwrap().insert(info.id.clone(), kill_tx);
+    state
+        .kill_senders
+        .lock()
+        .unwrap()
+        .insert(info.id.clone(), (generation, kill_tx));
     Ok((child, stdout, stderr, kill_rx))
 }
 
@@ -186,6 +277,7 @@ fn spawn_process(
 async fn monitor_task(
     state: Arc<AppState>,
     id: String,
+    generation: u64,
     mut child: Child,
     stdout: ChildStdout,
     stderr: ChildStderr,
@@ -203,11 +295,11 @@ async fn monitor_task(
         }
         tokio::select! {
             res = out_lines.next_line(), if !out_done => match res {
-                Ok(Some(line)) => push_line(&state, &id, line),
+                Ok(Some(line)) => push_line(&state, &id, generation, line),
                 _ => out_done = true,
             },
             res = err_lines.next_line(), if !err_done => match res {
-                Ok(Some(line)) => push_line(&state, &id, line),
+                Ok(Some(line)) => push_line(&state, &id, generation, line),
                 _ => err_done = true,
             },
             _ = kill_rx.recv(), if !stop_requested => {
@@ -220,7 +312,9 @@ async fn monitor_task(
     let exit = child.wait().await;
     {
         let mut tasks = state.tasks.lock().unwrap();
-        if let Some(task) = tasks.get_mut(&id) {
+        // 代数不匹配说明任务已被编辑重启或删除，旧监控不再更新状态
+        let current = tasks.get_mut(&id).filter(|t| t.generation == generation);
+        if let Some(task) = current {
             match exit {
                 Ok(s) if stop_requested => {
                     task.info.status = TaskStatus::Stopped;
@@ -241,7 +335,11 @@ async fn monitor_task(
             }
         }
     }
-    state.kill_senders.lock().unwrap().remove(&id);
+    // 仅当代数匹配时才清理停止通道，避免误删新进程的信号
+    let mut kill_senders = state.kill_senders.lock().unwrap();
+    if kill_senders.get(&id).is_some_and(|(g, _)| *g == generation) {
+        kill_senders.remove(&id);
+    }
 }
 
 /// GET /api/tasks/:id/output 读取任务最新 500 行输出与当前状态
@@ -262,7 +360,12 @@ pub async fn stop_task(
     State(state): State<Arc<AppState>>,
     Path(id): Path<String>,
 ) -> ApiResult<Json<Task>> {
-    let sender = state.kill_senders.lock().unwrap().get(&id).cloned();
+    let sender = state
+        .kill_senders
+        .lock()
+        .unwrap()
+        .get(&id)
+        .map(|(_, tx)| tx.clone());
     match sender {
         Some(tx) => {
             let _ = tx.try_send(());
@@ -294,7 +397,7 @@ pub async fn delete_task(
     if !existed {
         return Err(ApiError::not_found("任务不存在"));
     }
-    if let Some(tx) = state.kill_senders.lock().unwrap().remove(&id) {
+    if let Some((_, tx)) = state.kill_senders.lock().unwrap().remove(&id) {
         let _ = tx.try_send(());
     }
     Ok(StatusCode::NO_CONTENT)

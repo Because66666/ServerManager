@@ -36,7 +36,7 @@ async fn main() {
         )
         .route("/api/tasks/{id}/output", get(tasks::get_output))
         .route("/api/tasks/{id}/stop", post(tasks::stop_task))
-        .route("/api/tasks/{id}", delete(tasks::delete_task))
+        .route("/api/tasks/{id}", delete(tasks::delete_task).put(tasks::update_task))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,

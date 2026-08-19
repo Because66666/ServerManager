@@ -1,10 +1,10 @@
-// Dashboard.tsx: 主界面——顶栏、整机资源环形卡片、任务列表与各类弹窗编排
+// Dashboard.tsx: 主界面——顶栏、整机资源环形卡片、任务列表（新建/编辑/停止/删除）与各类弹窗编排
 import { useCallback, useEffect, useState } from 'react'
 import { api, formatBytes, type SystemStats, type Task } from '../api'
 import RingCard from '../components/RingCard'
 import TaskCard from '../components/TaskCard'
 import ConsoleModal from '../components/ConsoleModal'
-import CreateTaskModal from '../components/CreateTaskModal'
+import TaskFormModal from '../components/TaskFormModal'
 import ConfirmDialog from '../components/ConfirmDialog'
 import { LogoutIcon, PlusIcon, RefreshIcon, ServerIcon, TerminalIcon } from '../components/icons'
 
@@ -16,7 +16,8 @@ const STATS_POLL_INTERVAL = 2000
 export default function Dashboard({ onLogout }: { onLogout: () => void }) {
   const [stats, setStats] = useState<SystemStats | null>(null)
   const [tasks, setTasks] = useState<Task[]>([])
-  const [showCreate, setShowCreate] = useState(false)
+  const [formOpen, setFormOpen] = useState(false)
+  const [editingTask, setEditingTask] = useState<Task | null>(null)
   const [consoleTaskId, setConsoleTaskId] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<Task | null>(null)
   const [pendingStop, setPendingStop] = useState<Task | null>(null)
@@ -179,7 +180,10 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
                 backgroundColor: 'var(--primary)',
                 color: '#ffffff',
               }}
-              onClick={() => setShowCreate(true)}
+              onClick={() => {
+                setEditingTask(null)
+                setFormOpen(true)
+              }}
             >
               <PlusIcon width={13} height={13} />
               新建任务
@@ -203,6 +207,10 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
                   key={task.id}
                   task={task}
                   onOpen={(t) => setConsoleTaskId(t.id)}
+                  onEdit={(t) => {
+                    setEditingTask(t)
+                    setFormOpen(true)
+                  }}
                   onStop={(t) => setPendingStop(t)}
                   onDelete={(t) => setPendingDelete(t)}
                 />
@@ -213,8 +221,12 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
       </main>
 
       {/* 弹窗 */}
-      {showCreate && (
-        <CreateTaskModal onClose={() => setShowCreate(false)} onCreated={refreshTasks} />
+      {formOpen && (
+        <TaskFormModal
+          task={editingTask}
+          onClose={() => setFormOpen(false)}
+          onSaved={refreshTasks}
+        />
       )}
       {consoleTaskId && (
         <ConsoleModal

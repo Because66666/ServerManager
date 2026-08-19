@@ -90,6 +90,20 @@ export const api = {
       body: JSON.stringify(payload),
     }),
 
+  updateTask: (
+    id: string,
+    payload: {
+      name: string
+      command: string
+      args: string[]
+      workDir?: string
+    },
+  ) =>
+    request<Task>(`/api/tasks/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(payload),
+    }),
+
   output: (id: string) => request<TaskOutput>(`/api/tasks/${id}/output`),
 
   stop: (id: string) => request<Task>(`/api/tasks/${id}/stop`, { method: 'POST' }),
