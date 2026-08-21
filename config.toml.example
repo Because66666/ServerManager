@@ -1,0 +1,22 @@
+# ServerManager 配置文件
+
+[server]
+# 监听地址与端口
+host = "127.0.0.1"
+port = 9999
+# 前端静态资源目录（相对后端工作目录）
+static_dir = "frontend/dist"
+# SQLite 数据库文件路径（任务持久化，相对后端工作目录）
+db_path = "data.db"
+
+[auth]
+# 管理界面登录密钥，请自行修改
+key = ""
+# 会话有效期（分钟），认证请求会滑动续期，缺省 1440（24 小时）
+session_ttl_minutes = 1440
+# 登录限速：login_window_secs 秒内最多允许 max_attempts_per_window 次尝试
+login_window_secs = 60
+max_attempts_per_window = 5
+# 连续失败 max_failures 次后锁定该 IP，锁定时长 lock_minutes 分钟
+max_failures = 5
+lock_minutes = 15
