@@ -25,6 +25,14 @@ async fn main() {
         std::process::exit(1);
     });
 
+    // 密钥为空时拒绝启动，避免服务在无防护状态下暴露
+    if config.auth.key.trim().is_empty() {
+        eprintln!("启动失败: 配置项 [auth].key 为空");
+        eprintln!("原因: 登录密钥未设置，服务拒绝在无身份验证防护的情况下运行");
+        eprintln!("处理: 请在配置文件 {config_path} 的 [auth] 段设置非空的 key 后重新启动");
+        std::process::exit(1);
+    }
+
     let database = db::Db::open(&config.server.db_path).unwrap_or_else(|e| {
         eprintln!("{e}");
         std::process::exit(1);
