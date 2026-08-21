@@ -1,10 +1,13 @@
-// TaskStatusRing.tsx: 任务状态环卡片——单环分段展示各状态任务数量（运行中/错误/已停止/已退出），中心为总数
+// TaskStatusRing.tsx: 任务状态环卡片——单环分段展示各状态任务数量（运行中/错误/已停止/已退出），
+// 分段两端为圆润圆角并留有间隙（参考资源环样式），中心为总数
 import type { Task, TaskStatus } from '../api'
 
 const SIZE = 200
 const STROKE = 22
 const RADIUS = (SIZE - STROKE) / 2
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS
+/** 相邻分段间的间隙（与线宽相当，保证圆头端帽互不重叠） */
+const GAP = STROKE
 
 /** 状态分组：展示顺序 + 颜色 + 文案 */
 const SEGMENTS: {
@@ -25,6 +28,8 @@ export default function TaskStatusRing({ tasks }: { tasks: Task[] }) {
     count: tasks.filter((t) => seg.statuses.includes(t.status)).length,
   }))
   const total = tasks.length
+  const nonZero = counts.filter((c) => c.count > 0)
+  const multi = nonZero.length > 1
 
   // 依次累加各段起点
   let offset = 0
@@ -48,11 +53,24 @@ export default function TaskStatusRing({ tasks }: { tasks: Task[] }) {
               stroke="var(--background-secondary)"
               strokeWidth={STROKE}
             />
-            {total > 0 &&
-              counts.map((seg) => {
-                if (seg.count === 0) return null
+            {/* 仅一个状态时直接画满环，避免圆头端帽自重叠 */}
+            {nonZero.length === 1 && (
+              <circle
+                cx={SIZE / 2}
+                cy={SIZE / 2}
+                r={RADIUS}
+                fill="none"
+                stroke={nonZero[0].color}
+                strokeWidth={STROKE}
+              />
+            )}
+            {multi &&
+              nonZero.map((seg) => {
                 const len = (seg.count / total) * CIRCUMFERENCE
-                const el = (
+                const visible = Math.max(len - GAP, 2)
+                const start = offset + GAP / 2
+                offset += len
+                return (
                   <circle
                     key={seg.key}
                     className="ring-progress"
@@ -62,12 +80,11 @@ export default function TaskStatusRing({ tasks }: { tasks: Task[] }) {
                     fill="none"
                     stroke={seg.color}
                     strokeWidth={STROKE}
-                    strokeDasharray={`${len} ${CIRCUMFERENCE - len}`}
-                    strokeDashoffset={-offset}
+                    strokeLinecap="round"
+                    strokeDasharray={`${visible} ${CIRCUMFERENCE - visible}`}
+                    strokeDashoffset={-start}
                   />
                 )
-                offset += len
-                return el
               })}
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
