@@ -1,6 +1,7 @@
-// main.rs: ServerManager 后端入口——加载配置、装配路由（登录/任务/监控/静态托管）并启动 HTTP 服务
+// main.rs: ServerManager 后端入口——加载配置、打开数据库、恢复持久化任务、装配路由并启动 HTTP 服务
 mod auth;
 mod config;
+mod db;
 mod state;
 mod stats;
 mod static_files;
@@ -24,7 +25,14 @@ async fn main() {
         std::process::exit(1);
     });
 
-    let state = Arc::new(AppState::new(config.clone()));
+    let database = db::Db::open(&config.server.db_path).unwrap_or_else(|e| {
+        eprintln!("{e}");
+        std::process::exit(1);
+    });
+
+    let state = Arc::new(AppState::new(config.clone(), database));
+    // 恢复持久化任务：列表全量恢复，重启前运行中的任务自动拉起
+    tasks::restore_tasks(&state);
     stats::start_stats_collector(state.clone());
 
     // 需要鉴权的 API 路由

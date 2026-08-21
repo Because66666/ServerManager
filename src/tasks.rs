@@ -1,4 +1,4 @@
-// tasks.rs: 进程任务管理——创建、编辑、监控、输出环形缓冲（最新 500 行）、停止与删除
+// tasks.rs: 进程任务管理——创建、编辑、监控、输出环形缓冲（最新 500 行）、停止、删除、SQLite 持久化与重启恢复
 use crate::state::{ApiError, ApiResult, AppState};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -12,6 +12,22 @@ use tokio::io::{AsyncBufReadExt, BufReader};
 use tokio::process::{Child, ChildStderr, ChildStdout, Command};
 use tokio::sync::mpsc;
 use uuid::Uuid;
+
+/// 解析实际执行的程序：有工作目录且命令为相对路径时，优先使用「工作目录/命令」（若该文件存在），
+/// 否则按原命令执行（兼容 python 等 PATH 命令与绝对路径）
+fn resolve_program(info: &Task) -> std::path::PathBuf {
+    let cmd = std::path::Path::new(&info.command);
+    if cmd.is_absolute() {
+        return cmd.to_path_buf();
+    }
+    if let Some(dir) = &info.work_dir {
+        let joined = std::path::Path::new(dir).join(&info.command);
+        if joined.exists() {
+            return joined;
+        }
+    }
+    cmd.to_path_buf()
+}
 
 /// 每个任务保留的最大输出行数
 pub const MAX_OUTPUT_LINES: usize = 500;
@@ -155,6 +171,7 @@ pub async fn create_task(
                     generation: 0,
                 },
             );
+            state.db.insert_task(&info);
             tokio::spawn(monitor_task(state.clone(), id, 0, child, stdout, stderr, kill_rx));
             Ok((StatusCode::CREATED, Json(info)))
         }
@@ -171,7 +188,42 @@ pub async fn create_task(
                     generation: 0,
                 },
             );
+            state.db.insert_task(&failed);
             Ok((StatusCode::CREATED, Json(failed)))
+        }
+    }
+}
+
+/// 服务启动时从数据库恢复任务：全部任务恢复到列表，重启前运行中的任务自动重新拉起
+pub fn restore_tasks(state: &Arc<AppState>) {
+    for info in state.db.load_tasks() {
+        let was_running = info.status == TaskStatus::Running;
+        let id = info.id.clone();
+        state.tasks.lock().unwrap().insert(
+            id.clone(),
+            TaskInner {
+                info: info.clone(),
+                output: VecDeque::new(),
+                generation: 0,
+            },
+        );
+        if !was_running {
+            continue;
+        }
+        match spawn_process(state, &info, 0) {
+            Ok((child, stdout, stderr, kill_rx)) => {
+                tokio::spawn(monitor_task(state.clone(), id, 0, child, stdout, stderr, kill_rx));
+            }
+            Err(e) => {
+                let updated = {
+                    let mut tasks = state.tasks.lock().unwrap();
+                    let task = tasks.get_mut(&id).expect("刚插入的任务必存在");
+                    task.info.status = TaskStatus::Failed;
+                    task.info.error = Some(e);
+                    task.info.clone()
+                };
+                state.db.update_task(&updated);
+            }
         }
     }
 }
@@ -228,6 +280,7 @@ pub async fn update_task(
 
     match spawn_process(&state, &info, generation) {
         Ok((child, stdout, stderr, kill_rx)) => {
+            state.db.update_task(&info);
             tokio::spawn(monitor_task(state.clone(), id, generation, child, stdout, stderr, kill_rx));
             Ok(Json(info))
         }
@@ -240,6 +293,7 @@ pub async fn update_task(
                     task.info.error = Some(e.clone());
                 }
             }
+            state.db.update_status(&id, &TaskStatus::Failed, None, &Some(e.clone()));
             Err(ApiError::bad_request(e))
         }
     }
@@ -251,7 +305,7 @@ fn spawn_process(
     info: &Task,
     generation: u64,
 ) -> Result<(Child, ChildStdout, ChildStderr, mpsc::Receiver<()>), String> {
-    let mut cmd = Command::new(&info.command);
+    let mut cmd = Command::new(resolve_program(info));
     cmd.args(&info.args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
@@ -310,6 +364,7 @@ async fn monitor_task(
     }
 
     let exit = child.wait().await;
+    let mut persisted: Option<(TaskStatus, Option<i32>, Option<String>)> = None;
     {
         let mut tasks = state.tasks.lock().unwrap();
         // 代数不匹配说明任务已被编辑重启或删除，旧监控不再更新状态
@@ -333,7 +388,16 @@ async fn monitor_task(
                     task.info.error = Some(e.to_string());
                 }
             }
+            persisted = Some((
+                task.info.status.clone(),
+                task.info.exit_code,
+                task.info.error.clone(),
+            ));
         }
+    }
+    // 状态变更同步到数据库（重启后据此恢复）
+    if let Some((status, code, err)) = persisted {
+        state.db.update_status(&id, &status, code, &err);
     }
     // 仅当代数匹配时才清理停止通道，避免误删新进程的信号
     let mut kill_senders = state.kill_senders.lock().unwrap();
@@ -397,6 +461,7 @@ pub async fn delete_task(
     if !existed {
         return Err(ApiError::not_found("任务不存在"));
     }
+    state.db.delete_task(&id);
     if let Some((_, tx)) = state.kill_senders.lock().unwrap().remove(&id) {
         let _ = tx.try_send(());
     }

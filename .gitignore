@@ -1,3 +1,7 @@
 /target
 frontend/node_modules
 frontend/dist
+data.db
+data.db-wal
+data.db-shm
+config.toml

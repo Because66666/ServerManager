@@ -1,5 +1,6 @@
-// state.rs: 全局共享状态定义（会话、登录防护、任务表、系统监控缓存）与统一 API 错误类型
+// state.rs: 全局共享状态定义（会话、登录防护、任务表、持久化、系统监控缓存）与统一 API 错误类型
 use crate::config::Config;
+use crate::db::Db;
 use crate::tasks::TaskInner;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -52,6 +53,8 @@ pub struct AppState {
     pub login_attempts: Mutex<HashMap<String, LoginAttempt>>,
     /// 任务表：任务 id -> 任务内部结构（含输出环形缓冲）
     pub tasks: Mutex<HashMap<String, TaskInner>>,
+    /// SQLite 持久层（任务记录）
+    pub db: Db,
     /// 运行中任务的停止信号发送端：任务 id -> (进程代数, kill 通道)
     pub kill_senders: Mutex<HashMap<String, (u64, mpsc::Sender<()>)>>,
     /// 整机资源占用缓存，由后台采集任务周期刷新
@@ -59,7 +62,7 @@ pub struct AppState {
 }
 
 impl AppState {
-    pub fn new(config: Config) -> Self {
+    pub fn new(config: Config, db: Db) -> Self {
         let session_ttl = Duration::from_secs(config.auth.session_ttl_minutes * 60);
         Self {
             config,
@@ -67,6 +70,7 @@ impl AppState {
             session_ttl,
             login_attempts: Mutex::new(HashMap::new()),
             tasks: Mutex::new(HashMap::new()),
+            db,
             kill_senders: Mutex::new(HashMap::new()),
             stats: Mutex::new(SystemStats::default()),
         }

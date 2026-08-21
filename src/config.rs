@@ -17,6 +17,9 @@ pub struct ServerConfig {
     pub port: u16,
     #[serde(default = "default_static_dir")]
     pub static_dir: PathBuf,
+    /// SQLite 数据库文件路径（任务持久化）
+    #[serde(default = "default_db_path")]
+    pub db_path: PathBuf,
 }
 
 impl Default for ServerConfig {
@@ -25,6 +28,7 @@ impl Default for ServerConfig {
             host: default_host(),
             port: default_port(),
             static_dir: default_static_dir(),
+            db_path: default_db_path(),
         }
     }
 }
@@ -58,6 +62,10 @@ fn default_port() -> u16 {
 
 fn default_static_dir() -> PathBuf {
     PathBuf::from("frontend/dist")
+}
+
+fn default_db_path() -> PathBuf {
+    PathBuf::from("data.db")
 }
 
 fn default_session_ttl_minutes() -> u64 {
