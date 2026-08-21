@@ -11,6 +11,7 @@ use axum::routing::{delete, get, post};
 use axum::Router;
 use config::Config;
 use state::AppState;
+use std::net::SocketAddr;
 use std::sync::Arc;
 
 #[tokio::main]
@@ -56,5 +57,7 @@ async fn main() {
             eprintln!("绑定端口 {addr} 失败: {e}");
             std::process::exit(1);
         });
-    axum::serve(listener, app).await.expect("HTTP 服务异常退出");
+    axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
+        .await
+        .expect("HTTP 服务异常退出");
 }

@@ -32,6 +32,20 @@ impl Default for ServerConfig {
 #[derive(Debug, Clone, Deserialize)]
 pub struct AuthConfig {
     pub key: String,
+    /// 会话有效期（分钟），认证请求会滑动续期
+    #[serde(default = "default_session_ttl_minutes")]
+    pub session_ttl_minutes: u64,
+    /// 滑动窗口（秒）内允许的最大登录尝试次数
+    #[serde(default = "default_rate_window_secs")]
+    pub login_window_secs: u64,
+    #[serde(default = "default_max_attempts")]
+    pub max_attempts_per_window: u32,
+    /// 连续失败多少次后锁定
+    #[serde(default = "default_max_failures")]
+    pub max_failures: u32,
+    /// 锁定时长（分钟）
+    #[serde(default = "default_lock_minutes")]
+    pub lock_minutes: u64,
 }
 
 fn default_host() -> String {
@@ -44,6 +58,26 @@ fn default_port() -> u16 {
 
 fn default_static_dir() -> PathBuf {
     PathBuf::from("frontend/dist")
+}
+
+fn default_session_ttl_minutes() -> u64 {
+    1440
+}
+
+fn default_rate_window_secs() -> u64 {
+    60
+}
+
+fn default_max_attempts() -> u32 {
+    5
+}
+
+fn default_max_failures() -> u32 {
+    5
+}
+
+fn default_lock_minutes() -> u64 {
+    15
 }
 
 impl Config {

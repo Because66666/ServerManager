@@ -1,12 +1,13 @@
-// state.rs: 全局共享状态定义（会话、任务表、系统监控缓存）与统一 API 错误类型
+// state.rs: 全局共享状态定义（会话、登录防护、任务表、系统监控缓存）与统一 API 错误类型
 use crate::config::Config;
 use crate::tasks::TaskInner;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::Json;
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, VecDeque};
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
 /// 整机资源占用快照
@@ -29,11 +30,26 @@ pub struct SystemStats {
     pub disk_usage: f32,
 }
 
+/// 单个客户端 IP 的登录防护记录：滑动窗口限速 + 连续失败锁定
+#[derive(Default)]
+pub struct LoginAttempt {
+    /// 近期登录尝试时刻（用于滑动窗口限速）
+    pub times: VecDeque<Instant>,
+    /// 连续失败次数（成功后清零）
+    pub failures: u32,
+    /// 锁定截止时间
+    pub locked_until: Option<Instant>,
+}
+
 /// 全局共享状态
 pub struct AppState {
     pub config: Config,
-    /// 已登录的会话 token 集合
-    pub sessions: Mutex<HashSet<String>>,
+    /// 会话 token -> 过期时刻（认证时滑动续期）
+    pub sessions: Mutex<HashMap<String, Instant>>,
+    /// 会话有效期
+    pub session_ttl: Duration,
+    /// 登录防护记录：客户端 IP -> 尝试记录
+    pub login_attempts: Mutex<HashMap<String, LoginAttempt>>,
     /// 任务表：任务 id -> 任务内部结构（含输出环形缓冲）
     pub tasks: Mutex<HashMap<String, TaskInner>>,
     /// 运行中任务的停止信号发送端：任务 id -> (进程代数, kill 通道)
@@ -44,9 +60,12 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(config: Config) -> Self {
+        let session_ttl = Duration::from_secs(config.auth.session_ttl_minutes * 60);
         Self {
             config,
-            sessions: Mutex::new(HashSet::new()),
+            sessions: Mutex::new(HashMap::new()),
+            session_ttl,
+            login_attempts: Mutex::new(HashMap::new()),
             tasks: Mutex::new(HashMap::new()),
             kill_senders: Mutex::new(HashMap::new()),
             stats: Mutex::new(SystemStats::default()),
