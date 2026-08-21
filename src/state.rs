@@ -21,6 +21,12 @@ pub struct SystemStats {
     pub memory_total: u64,
     /// 内存占用百分比
     pub memory_usage: f32,
+    /// 全盘已用空间（字节）
+    pub disk_used: u64,
+    /// 全盘总空间（字节）
+    pub disk_total: u64,
+    /// 磁盘占用百分比
+    pub disk_usage: f32,
 }
 
 /// 全局共享状态

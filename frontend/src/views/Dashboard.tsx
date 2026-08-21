@@ -1,7 +1,8 @@
-// Dashboard.tsx: 主界面——顶栏、整机资源环形卡片、任务列表（新建/编辑/停止/删除）与各类弹窗编排
+// Dashboard.tsx: 主界面——顶栏、资源三环与任务状态环、任务列表（新建/编辑/停止/删除）与各类弹窗编排
 import { useCallback, useEffect, useState } from 'react'
-import { api, formatBytes, type SystemStats, type Task } from '../api'
-import RingCard from '../components/RingCard'
+import { api, type SystemStats, type Task } from '../api'
+import ResourceRings from '../components/ResourceRings'
+import TaskStatusRing from '../components/TaskStatusRing'
 import TaskCard from '../components/TaskCard'
 import ConsoleModal from '../components/ConsoleModal'
 import TaskFormModal from '../components/TaskFormModal'
@@ -143,18 +144,10 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
       </header>
 
       <main className="mx-auto flex max-w-5xl flex-col gap-5 px-6 pt-4 pb-10">
-        {/* 整机资源环形卡片 */}
+        {/* 资源三环 + 任务状态环 */}
         <section className="flex gap-5">
-          <RingCard label="CPU 占用" percent={stats?.cpuUsage ?? 0} sub="整机实时占用" />
-          <RingCard
-            label="内存占用"
-            percent={stats?.memoryUsage ?? 0}
-            sub={
-              stats
-                ? `${formatBytes(stats.memoryUsed)} / ${formatBytes(stats.memoryTotal)}`
-                : '加载中…'
-            }
-          />
+          <ResourceRings stats={stats} />
+          <TaskStatusRing tasks={tasks} />
         </section>
 
         {/* 任务面板 */}

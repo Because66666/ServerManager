@@ -18,6 +18,9 @@ export interface SystemStats {
   memoryUsed: number
   memoryTotal: number
   memoryUsage: number
+  diskUsed: number
+  diskTotal: number
+  diskUsage: number
 }
 
 export interface TaskOutput {
