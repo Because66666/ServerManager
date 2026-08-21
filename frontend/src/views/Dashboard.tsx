@@ -220,21 +220,19 @@ export default function Dashboard({ onLogout }: { onLogout: () => void }) {
         </section>
       </main>
 
-      {/* 弹窗 */}
-      {formOpen && (
-        <TaskFormModal
-          task={editingTask}
-          onClose={() => setFormOpen(false)}
-          onSaved={refreshTasks}
-        />
-      )}
-      {consoleTaskId && (
-        <ConsoleModal
-          taskId={consoleTaskId}
-          onClose={() => setConsoleTaskId(null)}
-          onStop={handleStopFromConsole}
-        />
-      )}
+      {/* 弹窗（常驻渲染，由组件内部管理开/关动画与延迟卸载） */}
+      <TaskFormModal
+        open={formOpen}
+        task={editingTask}
+        onClose={() => setFormOpen(false)}
+        onSaved={refreshTasks}
+      />
+      <ConsoleModal
+        open={!!consoleTaskId}
+        taskId={consoleTaskId ?? ''}
+        onClose={() => setConsoleTaskId(null)}
+        onStop={handleStopFromConsole}
+      />
       <ConfirmDialog
         open={!!pendingStop}
         title="停止任务"

@@ -1,5 +1,6 @@
-// ConfirmDialog.tsx: 统一模态确认弹窗——危险/主色操作二次确认，内置 loading 轻量遮罩
+// ConfirmDialog.tsx: 统一模态确认弹窗——危险/主色操作二次确认，内置 loading 轻量遮罩，带开/关动画
 import type { ReactNode } from 'react'
+import { useDelayedUnmount } from '../hooks/useDelayedUnmount'
 import { SpinnerIcon } from './icons'
 
 interface ConfirmDialogProps {
@@ -25,7 +26,8 @@ export default function ConfirmDialog({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  if (!open) return null
+  const { render, closing } = useDelayedUnmount(open)
+  if (!render) return null
 
   const confirmColor = variant === 'danger' ? 'var(--destructive)' : 'var(--primary)'
   const btnClass =
@@ -38,7 +40,7 @@ export default function ConfirmDialog({
   } as const
 
   return (
-    <div className="modal-overlay" onClick={loading ? undefined : onCancel}>
+    <div className={`modal-overlay ${closing ? 'closing' : ''}`} onClick={loading ? undefined : onCancel}>
       <div
         className="modal-card relative w-[360px] p-6"
         onClick={(e) => e.stopPropagation()}

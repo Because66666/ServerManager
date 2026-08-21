@@ -1,6 +1,7 @@
-// ConsoleModal.tsx: 任务控制台弹窗——HTTP 轮询最新 500 行输出，自动滚动到底部
+// ConsoleModal.tsx: 任务控制台弹窗——HTTP 轮询最新 500 行输出，自动滚动到底部，带开/关动画
 import { useEffect, useRef, useState } from 'react'
 import { api, type TaskOutput } from '../api'
+import { useDelayedUnmount } from '../hooks/useDelayedUnmount'
 import { STATUS_META } from './status'
 import { CloseIcon, SpinnerIcon, StopIcon } from './icons'
 
@@ -8,18 +9,30 @@ import { CloseIcon, SpinnerIcon, StopIcon } from './icons'
 const POLL_INTERVAL = 1500
 
 interface ConsoleModalProps {
+  /** 是否打开弹窗 */
+  open: boolean
   taskId: string
   onClose: () => void
   onStop: () => void
 }
 
-export default function ConsoleModal({ taskId, onClose, onStop }: ConsoleModalProps) {
+export default function ConsoleModal({ open, taskId, onClose, onStop }: ConsoleModalProps) {
+  const { render, closing } = useDelayedUnmount(open)
   const [data, setData] = useState<TaskOutput | null>(null)
   const [error, setError] = useState('')
   const consoleRef = useRef<HTMLDivElement>(null)
 
-  // 轮询输出与任务状态
+  // 每次打开时重置内部状态（组件常驻渲染）
   useEffect(() => {
+    if (open) {
+      setData(null)
+      setError('')
+    }
+  }, [open, taskId])
+
+  // 轮询输出与任务状态（仅打开期间）
+  useEffect(() => {
+    if (!open || !taskId) return
     let cancelled = false
     const load = async () => {
       try {
@@ -38,7 +51,7 @@ export default function ConsoleModal({ taskId, onClose, onStop }: ConsoleModalPr
       cancelled = true
       clearInterval(timer)
     }
-  }, [taskId])
+  }, [open, taskId])
 
   // 新输出到达时滚动到底部
   useEffect(() => {
@@ -48,8 +61,10 @@ export default function ConsoleModal({ taskId, onClose, onStop }: ConsoleModalPr
 
   const meta = data ? STATUS_META[data.task.status] : null
 
+  if (!render) return null
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className={`modal-overlay ${closing ? 'closing' : ''}`} onClick={onClose}>
       <div
         className="modal-card flex h-[76vh] w-[820px] max-w-[92vw] flex-col p-6"
         onClick={(e) => e.stopPropagation()}

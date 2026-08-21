@@ -84,6 +84,26 @@ body {
   }
 }
 
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes scale-out {
+  from {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96) translateY(6px);
+  }
+}
+
 @keyframes pulse-dot {
   0%,
   100% {
@@ -157,6 +177,15 @@ body {
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-lg);
   animation: scale-in 0.22s ease both;
+}
+
+/* 关闭时的逆动画：遮罩淡出 + 卡片缩小下沉 */
+.modal-overlay.closing {
+  animation: fade-out 0.18s ease both;
+}
+
+.modal-overlay.closing .modal-card {
+  animation: scale-out 0.22s ease both;
 }
 
 /* ---------- 输入框 ---------- */

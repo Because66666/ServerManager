@@ -1,23 +1,39 @@
-// TaskFormModal.tsx: 任务表单弹窗——新建与编辑复用，编辑保存后由后端立即以新配置重启进程
-import { useState, type FormEvent } from 'react'
+// TaskFormModal.tsx: 任务表单弹窗——新建与编辑复用，编辑保存后由后端立即以新配置重启进程，带开/关动画
+import { useEffect, useState, type FormEvent } from 'react'
 import { api, type Task } from '../api'
+import { useDelayedUnmount } from '../hooks/useDelayedUnmount'
 import { CloseIcon, PencilIcon, PlusIcon, SpinnerIcon } from './icons'
 
 interface TaskFormModalProps {
+  /** 是否打开弹窗 */
+  open: boolean
   /** 传入已有任务时为编辑模式，否则为新建模式 */
   task?: Task | null
   onClose: () => void
   onSaved: () => void
 }
 
-export default function TaskFormModal({ task, onClose, onSaved }: TaskFormModalProps) {
+export default function TaskFormModal({ open, task, onClose, onSaved }: TaskFormModalProps) {
   const editing = !!task
+  const { render, closing } = useDelayedUnmount(open)
   const [name, setName] = useState(task?.name ?? '')
   const [command, setCommand] = useState(task?.command ?? '')
   const [args, setArgs] = useState(task?.args.join(' ') ?? '')
   const [workDir, setWorkDir] = useState(task?.workDir ?? '')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // 每次打开时重置表单（组件常驻渲染，需手动同步初始值）
+  useEffect(() => {
+    if (open) {
+      setName(task?.name ?? '')
+      setCommand(task?.command ?? '')
+      setArgs(task?.args.join(' ') ?? '')
+      setWorkDir(task?.workDir ?? '')
+      setError('')
+      setLoading(false)
+    }
+  }, [open, task])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -50,8 +66,10 @@ export default function TaskFormModal({ task, onClose, onSaved }: TaskFormModalP
 
   const labelStyle = { fontSize: 'var(--font-size-xs)', color: 'var(--text-secondary)' }
 
+  if (!render) return null
+
   return (
-    <div className="modal-overlay" onClick={onClose}>
+    <div className={`modal-overlay ${closing ? 'closing' : ''}`} onClick={onClose}>
       <div className="modal-card w-[440px] p-6" onClick={(e) => e.stopPropagation()}>
         <div className="mb-5 flex items-center">
           <span
